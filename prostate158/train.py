@@ -329,21 +329,47 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
         )
         eval_loss_handler.attach(self.evaluator, "eval_loss")
 
+    # def _get_meta_dict(self, batch) -> list:
+    #     "Get dict of metadata from engine. Needed as `batch_transform`"
+    #     image_cols=self.config.data.image_cols
+    #     image_name=image_cols[0] if isinstance(image_cols, list) else image_cols
+    #     key=f'{image_name}_meta_dict'
+    #     return [item[key] for item in batch]
+
     def _get_meta_dict(self, batch) -> list:
         "Get dict of metadata from engine. Needed as `batch_transform`"
         image_cols = self.config.data.image_cols
         image_name = image_cols[0] if isinstance(image_cols, list) else image_cols
         key = f"{image_name}_meta_dict"
-        return [item[key] for item in batch]
 
-    def load_checkpoint(self, checkpoint=None):
+        # Add a try-except block to handle missing metadata
+        try:
+            return [item[key] for item in batch]
+        except KeyError:
+            # Return a default dictionary with some identifiable information
+            # This could be iteration number, image shape, etc.
+            return [{"missing_meta": True, "batch_idx": i} for i in range(len(batch))]
+
+    def load_checkpoint(self, checkpoint=None, map_location=None):
         if not checkpoint:
             # get name of last checkpoint
             checkpoint = os.path.join(
                 self.config.model_dir,
                 f"network_{self.config.run_id}_key_metric={self.evaluator.state.best_metric:.4f}.pt",
             )
-        self.network.load_state_dict(torch.load(checkpoint))
+
+        # If map_location is not provided, try to use the current device or fall back to CPU
+        if map_location is None:
+            if torch.cuda.is_available():
+                map_location = f"cuda:{torch.cuda.current_device()}"
+            else:
+                map_location = "cpu"
+
+        print(f"Loading checkpoint from {checkpoint} to device {map_location}")
+        # Explicitly set weights_only=False to handle PyTorch 2.6+ changes
+        self.network.load_state_dict(
+            torch.load(checkpoint, map_location=map_location, weights_only=False)
+        )
 
     def run(self, try_resume_from_checkpoint=True) -> None:
         """Run training, if `try_resume_from_checkpoint` tries to
@@ -380,8 +406,9 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
             for k in self.evaluator.state.metric_details.keys()
         }
 
-    # pd.DataFrame(self.metrics).to_csv(f"{self.config.out_dir}/metric_logs.csv")
-    # pd.DataFrame(self.loss).to_csv(f"{self.config.out_dir}/loss_logs.csv")
+        # Save metrics and losses to CSV files
+        pd.DataFrame(self.metrics).to_csv(f"{self.config.out_dir}/metric_logs.csv")
+        pd.DataFrame(self.loss).to_csv(f"{self.config.out_dir}/loss_logs.csv")
 
     def fit_one_cycle(self, try_resume_from_checkpoint=True) -> None:
         "Run training using one-cycle-policy"
@@ -429,9 +456,9 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
         reduce_lr_on_plateau.attach(self.evaluator)
         self.schedulers += ["ReduceLROnPlateau"]
 
-    def evaluate(self, checkpoint=None, dataloader=None):
+    def evaluate(self, checkpoint=None, dataloader=None, map_location=None):
         "Run evaluation with best saved checkpoint"
-        self.load_checkpoint(checkpoint)
+        self.load_checkpoint(checkpoint, map_location=map_location)
         if dataloader:
             self.evaluator.set_data(dataloader)
             self.evaluator.state.epoch_length = len(dataloader)
