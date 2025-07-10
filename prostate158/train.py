@@ -219,7 +219,7 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
     ):
         self.config = config
         self._prepare_dirs()
-        self.config.device = torch.device(self.config.device)
+        self.device = torch.device(self.config.device)
 
         train_loader, val_loader = segmentation_dataloaders(
             config=config, train=True, valid=True, test=False
@@ -258,13 +258,20 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
             self._add_progress_bars()
 
         self.schedulers = []
-        # add different metrics dynamically
-        for m in metrics:
-            getattr(monai.handlers, m)(
-                include_background=False,
-                reduction="mean",
-                output_transform=from_engine(["pred", "label"]),
-            ).attach(self.evaluator, m)
+        try:
+            import skimage.measure
+            attach_hausdorff = True
+        except ImportError:
+            print("scikit-image not found, skipping HausdorffDistance and SurfaceDistance.")
+            attach_hausdorff = False
+
+        if attach_hausdorff:
+            for m in ["HausdorffDistance", "SurfaceDistance"]:
+                getattr(monai.handlers, m)(
+                    include_background=False,
+                    reduction="mean",
+                    output_transform=from_engine(["pred", "label"]),
+                ).attach(self.evaluator, m)
 
         self._add_metrics_logger()
         # add eval loss to metrics
@@ -375,20 +382,25 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
         """Run training, if `try_resume_from_checkpoint` tries to
         load previous checkpoint stored at `self.config.model_dir`
         """
+        model_dir = os.environ.get("SM_MODEL_DIR", self.config.model_dir)
+        self.config.model_dir = model_dir
 
-        if try_resume_from_checkpoint:
-            checkpoints = [
-                os.path.join(self.config.model_dir, checkpoint_name)
-                for checkpoint_name in os.listdir(self.config.model_dir)
-                if self.config.run_id in checkpoint_name
-            ]
-            try:
+        try:
+            if try_resume_from_checkpoint:
+                checkpoints = [
+                    os.path.join(self.config.model_dir, checkpoint_name)
+                    for checkpoint_name in os.listdir(self.config.model_dir)
+                    if self.config.run_id in checkpoint_name
+                ]
+            if checkpoints:
                 checkpoint = sorted(checkpoints)[-1]
                 self.load_checkpoint(checkpoint)
-                print(f"resuming from previous checkpoint at {checkpoint}")
-            except:
-                pass  # train from scratch
-
+                print(f"Resuming from previous checkpoint at {checkpoint}")
+            else:
+                print("No previous checkpoint found. Starting from scratch.")
+        except:
+            print("Error during checkpoint loading, training from scratch")
+            pass
         # train the model
         super().run()
 
@@ -406,6 +418,7 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
             for k in self.evaluator.state.metric_details.keys()
         }
 
+        os.makedirs(self.config.out_dir, exist_ok=True)
         # Save metrics and losses to CSV files
         pd.DataFrame(self.metrics).to_csv(f"{self.config.out_dir}/metric_logs.csv")
         pd.DataFrame(self.loss).to_csv(f"{self.config.out_dir}/loss_logs.csv")

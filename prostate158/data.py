@@ -142,7 +142,7 @@ def segmentation_dataloaders(
 
     # Set the number of workers based on config or default
     num_workers_count = (
-        config.data.num_workers if hasattr(config.data, "num_workers") else 16
+        config.data.num_workers if hasattr(config.data, "num_workers") else 2
     )
 
     ## ---------- data dicts ----------
