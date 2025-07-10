@@ -19,7 +19,7 @@ def main():
     # Load config yaml
     config_path = os.environ.get("SM_CHANNEL_TRAINING_CONFIG", "tumor.yaml")
     logger.info("Loading config from: %s", config_path)
-    
+
     with open(config_path, "r") as f:
         config = Munch.fromDict(yaml.safe_load(f))
 
@@ -28,10 +28,10 @@ def main():
     model_dir = os.environ.get("SM_MODEL_DIR", config.get("model_dir", "./models"))
     output_dir = os.environ.get("SM_OUTPUT_DATA_DIR", config.get("out_dir", "./outputs"))
     # data_dir = os.environ.get("SM_CHANNEL_TRAIN", config.get("data_dir", "./data/prostate158_train/train"))
-    data_dir = os.environ.get("SM_CHANNEL_TRAIN", config.get("data_dir", "opt/ml/data/"))
+    data_dir = os.environ.get("SM_CHANNEL_TRAIN", config.get("data_dir", "./opt/ml/data/"))
     config["model_dir"] = model_dir
     config["out_dir"] = output_dir
-    config["data_dir"] = data_dir
+    config["data_dir"] = "/opt/ml/data/"
 
     # Create trainer instance
     trainer = SegmentationTrainer(config)
