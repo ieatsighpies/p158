@@ -34,7 +34,11 @@ from monai.transforms import (
 ## ---------- base transforms ----------
 # applied everytime
 def get_base_transforms(config: dict, minv: int = 0, maxv: int = 1) -> list:
+    if not isinstance(config.data.image_cols, (list, tuple)):
+        config.data.image_cols = [config.data.image_cols]
 
+    if not isinstance(config.data.label_cols, (list, tuple)):
+        config.data.label_cols = [config.data.label_cols]
     tfms = []
     tfms += [LoadImaged(keys=config.data.image_cols + config.data.label_cols)]
     tfms += [EnsureChannelFirstd(keys=config.data.image_cols + config.data.label_cols),

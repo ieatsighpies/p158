@@ -162,6 +162,8 @@ def segmentation_dataloaders(
     if debug:
         train_df = train_df.sample(25)
         valid_df = valid_df.sample(5)
+    
+    train_df = train_df.map(lambda x: x.replace("train/", "") if isinstance(x, str) and x.startswith("train/") else x)
 
     train_df["split"] = "train"
     valid_df["split"] = "valid"

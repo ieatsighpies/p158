@@ -5,7 +5,7 @@ import pandas as pd
 from prostate158.train import SegmentationTrainer
 import logging
 import time
-from munch import Munch
+from pathlib import Path
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,8 +20,7 @@ def main():
     config_path = os.environ.get("SM_CHANNEL_TRAINING_CONFIG", "tumor.yaml")
     logger.info("Loading config from: %s", config_path)
 
-    with open(config_path, "r") as f:
-        config = Munch.fromDict(yaml.safe_load(f))
+    config = yaml.safe_load(Path(config_path).read_text())
 
 
     # Prepare directories from SageMaker env vars or fallback
@@ -29,9 +28,9 @@ def main():
     output_dir = os.environ.get("SM_OUTPUT_DATA_DIR", config.get("out_dir", "./outputs"))
     # data_dir = os.environ.get("SM_CHANNEL_TRAIN", config.get("data_dir", "./data/prostate158_train/train"))
     data_dir = os.environ.get("SM_CHANNEL_TRAIN", config.get("data_dir", "./opt/ml/data/"))
-    config["model_dir"] = model_dir
-    config["out_dir"] = output_dir
-    config["data_dir"] = "/opt/ml/data/"
+    config.model_dir = model_dir
+    config.out_dir = output_dir
+    config.data.data_dir = data_dir
 
     # Create trainer instance
     trainer = SegmentationTrainer(config)
