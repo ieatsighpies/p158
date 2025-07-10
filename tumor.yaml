@@ -8,7 +8,7 @@ log_dir: logs
 seed: 42
 device: "cuda"  #"cpu"
 data:
-  # data_dir: ./prostate158_train/
+  data_dir: ./prostate158_train/
   train_csv: ./prostate158/train.csv
   valid_csv: ./prostate158/valid.csv
   test_csv: ./prostate158/test.csv
