@@ -217,6 +217,7 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
         metrics: list = ["MeanDice", "HausdorffDistance", "SurfaceDistance"],
         save_latest_metrics: bool = True,
     ):
+        self.run_id = config.get("run_id", "tumor")
         self.config = config
         self._prepare_dirs()
         self.device = torch.device(self.config.device)
@@ -282,9 +283,9 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
 
     def _prepare_dirs(self) -> None:
         # create run_id, copy config file for reproducibility
-        os.makedirs(self.config.run_id, exist_ok=True)
-        with open(os.path.join(self.config.run_id, "config.yaml"), "w+") as f:
-            f.write(yaml.safe_dump(self.config))
+        os.makedirs(self.run_id, exist_ok=True)
+        with open(os.path.join(self.run_id, "config.yaml"), "w+") as f:
+            yaml.safe_dump(self.config)
 
         # delete old log_dir
         if os.path.exists(self.config.log_dir):
@@ -362,7 +363,7 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
             # get name of last checkpoint
             checkpoint = os.path.join(
                 self.config.model_dir,
-                f"network_{self.config.run_id}_key_metric={self.evaluator.state.best_metric:.4f}.pt",
+                f"network_{self.run_id}_key_metric={self.evaluator.state.best_metric:.4f}.pt",
             )
 
         # If map_location is not provided, try to use the current device or fall back to CPU
@@ -390,7 +391,7 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
                 checkpoints = [
                     os.path.join(self.config.model_dir, checkpoint_name)
                     for checkpoint_name in os.listdir(self.config.model_dir)
-                    if self.config.run_id in checkpoint_name
+                    if self.run_id in checkpoint_name
                 ]
             if checkpoints:
                 checkpoint = sorted(checkpoints)[-1]
