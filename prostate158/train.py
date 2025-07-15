@@ -222,12 +222,13 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
         
         self.config = config
         self._prepare_dirs()
+        self.config.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(self.config.device)
 
         train_loader, val_loader = segmentation_dataloaders(
             config=config, train=True, valid=True, test=False
         )
-        network = get_model(config=config).to(config.device)
+        network = get_model(config=config).to(self.device)
         optimizer = get_optimizer(network, config=config)
         loss_fn = get_loss(config=config)
         val_post_transforms = get_val_post_transforms(config=config)
@@ -235,7 +236,7 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
 
         self.evaluator = get_evaluator(
             config=config,
-            device=config.device,
+            device=self.device,
             network=network,
             val_data_loader=val_loader,
             val_post_transforms=val_post_transforms,
@@ -244,7 +245,7 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
         train_handlers = get_train_handlers(self.evaluator, config=config)
 
         super().__init__(
-            device=config.device,
+            device=self.device,
             max_epochs=self.config.training.max_epochs,
             train_data_loader=train_loader,
             network=network,
