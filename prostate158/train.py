@@ -266,6 +266,8 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
             attach_hausdorff = True
         except ImportError:
             print("scikit-image not found, skipping HausdorffDistance and SurfaceDistance.")
+            import subprocess
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "scikit-image"])
             attach_hausdorff = False
 
         if attach_hausdorff:

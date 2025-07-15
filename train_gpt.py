@@ -3,9 +3,13 @@ import sys
 import yaml
 import pandas as pd
 from prostate158.train import SegmentationTrainer
+from prostate158.utils import load_config
 import logging
 import time
 from pathlib import Path
+from munch import Munch
+import monai
+import torch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -13,34 +17,79 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def ensure_munch(config):
+    return config if isinstance(config, Munch) else Munch.fromDict(config)
+
+def validate_config(config: Munch):
+    required_keys = [
+        "model_dir",
+        "out_dir",
+        "data",
+        "data.train_csv",
+        "data.valid_csv",
+        "data.image_cols",
+        "data.label_cols",
+    ]
+    
+    for key in required_keys:
+        parts = key.split(".")
+        ref = config
+        for part in parts:
+            if not hasattr(ref, part):
+                raise ValueError(f"Missing required config key: {key}")
+            ref = getattr(ref, part)
 
 def main():
-    start = time.time()
-    # Load config yaml
-    config_path = os.environ.get("SM_CHANNEL_TRAINING_CONFIG", "tumor.yaml")
-    logger.info("Loading config from: %s", config_path)
+    train_dir = os.environ.get("SM_CHANNEL_TRAINING")
+    test_dir = os.environ.get("SM_CHANNEL_TEST")
+    model_weight_path = os.path.join(os.environ.get("SM_CHANNEL_MODEL"), "tumor.pt")
+    config_path = os.path.join(os.environ.get("SM_CHANNEL_TRAINING_CONFIG"), "tumor.yaml")
 
-    config = yaml.safe_load(Path(config_path).read_text())
+    # Example: load pretrained weights
+    model.load_state_dict(torch.load(model_weight_path, map_location=device))
+
+    # Load config
+    config_path = os.environ.get("SM_CHANNEL_TRAINING_CONFIG", "tumor.yaml")
+    config = load_config(config_path)
+    monai.utils.set_determinism(seed=config.seed)
 
 
     # Prepare directories from SageMaker env vars or fallback
-    model_dir = os.environ.get("SM_MODEL_DIR", config.get("model_dir", "./models"))
-    output_dir = os.environ.get("SM_OUTPUT_DATA_DIR", config.get("out_dir", "./outputs"))
-    # data_dir = os.environ.get("SM_CHANNEL_TRAIN", config.get("data_dir", "./data/prostate158_train/train"))
+    model_dir = os.environ.get("SM_MODEL_DIR", config.get("model_dir", "./opt/ml/input/data/model/")) #following input model channel
+    output_dir = os.environ.get("SM_OUTPUT_DATA_DIR", config.get("out_dir", "./opt/ml/output"))
     data_dir = os.environ.get("SM_CHANNEL_TRAIN", config.get("data_dir", "./opt/ml/data/"))
     config.model_dir = model_dir
     config.out_dir = output_dir
     config.data.data_dir = data_dir
-
+    
+    logging.info(
+        f"""
+        Running supervised segmentation training on single GPU
+        Run ID:     {config.run_id}
+        Debug:      {config.debug}
+        Out dir:    {config.out_dir}
+        Model dir:  {config.model_dir}
+        Log dir:    {config.log_dir}
+        Images:     {config.data.image_cols}
+        Labels:     {config.data.label_cols}
+        Data dir:   {config.data.data_dir}
+        """
+    )
     # Create trainer instance
-    trainer = SegmentationTrainer(config)
+    trainer = SegmentationTrainer(
+        progress_bar=True,
+        early_stopping=True,
+        metrics=["MeanDice", "HausdorffDistance", "SurfaceDistance"],
+        save_latest_metrics=True,
+        config=config,
+    )
 
     # Attach OneCycle scheduler
     trainer.fit_one_cycle()
 
     # Run training loop (default 5 epochs or from config)
-    max_epochs = config.get("max_epochs", 5)
-    trainer.run(try_resume_from_checkpoint=True, max_epochs=max_epochs)
+    start = time.time()
+    trainer.run()
     end = time.time()
     logger.info(f"Training completed in {(end - start)/60:.2f} minutes")
 

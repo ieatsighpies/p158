@@ -2,11 +2,12 @@ debug: False
 overwrite: False # overwrite outputs of last run if run_id was not changed
 ndim: 3
 run_id: tumor
-out_dir: ./output
-model_dir: ./models
+out_dir: /opt/ml/model/
+model_dir: /opt/ml/input/data/model/
 log_dir: logs
 seed: 42
 device: "cuda"  #"cpu"
+num_workers: 4
 data:
   data_dir: /opt/ml/input/data/
   train_csv: ./prostate158/train.csv
