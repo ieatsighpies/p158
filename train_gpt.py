@@ -40,14 +40,6 @@ def validate_config(config: Munch):
             ref = getattr(ref, part)
 
 def main():
-    train_dir = os.environ.get("SM_CHANNEL_TRAINING")
-    test_dir = os.environ.get("SM_CHANNEL_TEST")
-    model_weight_path = os.path.join(os.environ.get("SM_CHANNEL_MODEL"), "tumor.pt")
-    config_path = os.path.join(os.environ.get("SM_CHANNEL_TRAINING_CONFIG"), "tumor.yaml")
-
-    # Example: load pretrained weights
-    model.load_state_dict(torch.load(model_weight_path, map_location=device))
-
     # Load config
     config_path = os.environ.get("SM_CHANNEL_TRAINING_CONFIG", "tumor.yaml")
     config = load_config(config_path)
@@ -61,6 +53,12 @@ def main():
     config.model_dir = model_dir
     config.out_dir = output_dir
     config.data.data_dir = data_dir
+
+    print("torch version:", torch.__version__)
+    print("torch file: ", torch.__file__)
+    print("CUDA available?", torch.cuda.is_available())
+    print("CUDA device count:", torch.cuda.device_count())
+    print("Device name:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "No CUDA")
 
     logging.info(
         f"""

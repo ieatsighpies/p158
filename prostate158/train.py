@@ -219,10 +219,12 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
     ):
         self.run_id = config.get("run_id", "tumor")
         self.log_id = config.get("log_dir", "logs")
-        
+
         self.config = config
         self._prepare_dirs()
         self.config.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        if not torch.cuda.is_available():
+            print("Running on CPU — disabling AMP and CUDA-related configs.")
         self.device = torch.device(self.config.device)
 
         train_loader, val_loader = segmentation_dataloaders(
