@@ -30,7 +30,7 @@ def validate_config(config: Munch):
         "data.image_cols",
         "data.label_cols",
     ]
-    
+
     for key in required_keys:
         parts = key.split(".")
         ref = config
@@ -61,7 +61,7 @@ def main():
     config.model_dir = model_dir
     config.out_dir = output_dir
     config.data.data_dir = data_dir
-    
+
     logging.info(
         f"""
         Running supervised segmentation training on single GPU
@@ -83,6 +83,17 @@ def main():
         save_latest_metrics=True,
         config=config,
     )
+
+    #load pretrained weights from SageMaker model channel
+    state_dict = torch.load(
+        # see model channel in aws_train.ipynb
+        os.environ.get("SM_CHANNEL_MODEL"),
+        map_location=trainer.config.device
+    )
+    # Handle both cases: direct state dict or wrapped in 'state_dict' key
+    if isinstance(state_dict, dict) and "state_dict" in state_dict:
+        state_dict = state_dict["state_dict"]
+    trainer.network.load_state_dict(state_dict, strict=False)
 
     # Attach OneCycle scheduler
     trainer.fit_one_cycle()
