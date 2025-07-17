@@ -41,15 +41,16 @@ def validate_config(config: Munch):
 
 def main():
     # Load config
-    config_path = os.environ.get("SM_CHANNEL_TRAINING_CONFIG", "tumor.yaml")
+    training_config_dir = os.environ.get("SM_CHANNEL_TRAINING_CONFIG", "/opt/ml/input/data/training_config") #follow input channel
+    config_path = os.path.join(training_config_dir, "tumor.yaml")
     config = load_config(config_path)
     monai.utils.set_determinism(seed=config.seed)
 
 
     # Prepare directories from SageMaker env vars or fallback
-    model_dir = os.environ.get("SM_MODEL_DIR", config.get("model_dir", "./opt/ml/input/data/model/")) #following input model channel
-    output_dir = os.environ.get("SM_OUTPUT_DATA_DIR", config.get("out_dir", "./opt/ml/output"))
-    data_dir = os.environ.get("SM_CHANNEL_TRAIN", config.get("data_dir", "./opt/ml/data/"))
+    model_dir = config.get("model_dir", "/opt/ml/input/data/models") #following input model channel
+    output_dir = os.environ.get("SM_MODEL_DIR", config.get("out_dir", "/opt/ml/output"))
+    data_dir = os.environ.get("SM_CHANNEL_TRAIN", config.get("data_dir", "/opt/ml/input/data/training")) #follow input training channel
     config.model_dir = model_dir
     config.out_dir = output_dir
     config.data.data_dir = data_dir
@@ -82,10 +83,11 @@ def main():
         config=config,
     )
 
+    model_path = "/opt/ml/input/data/models/tumor.pt"
     #load pretrained weights from SageMaker model channel
     state_dict = torch.load(
         # see model channel in aws_train.ipynb
-        os.environ.get("SM_CHANNEL_MODEL"),
+        model_path,
         map_location=trainer.config.device
     )
     # Handle both cases: direct state dict or wrapped in 'state_dict' key
