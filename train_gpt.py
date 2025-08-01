@@ -1,13 +1,10 @@
 import os
 import sys
-import yaml
 import pandas as pd
 from prostate158.train import SegmentationTrainer
 from prostate158.utils import load_config
 import logging
 import time
-from pathlib import Path
-from munch import Munch
 import monai
 import torch
 
@@ -17,27 +14,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def ensure_munch(config):
-    return config if isinstance(config, Munch) else Munch.fromDict(config)
-
-def validate_config(config: Munch):
-    required_keys = [
-        "model_dir",
-        "out_dir",
-        "data",
-        "data.train_csv",
-        "data.valid_csv",
-        "data.image_cols",
-        "data.label_cols",
-    ]
-
-    for key in required_keys:
-        parts = key.split(".")
-        ref = config
-        for part in parts:
-            if not hasattr(ref, part):
-                raise ValueError(f"Missing required config key: {key}")
-            ref = getattr(ref, part)
 
 def main():
     # Load config
@@ -63,7 +39,7 @@ def main():
 
     logging.info(
         f"""
-        Running supervised segmentation training on single GPU
+        Running supervised segmentation training
         Run ID:     {config.run_id}
         Debug:      {config.debug}
         Out dir:    {config.out_dir}
