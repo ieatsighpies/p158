@@ -21,9 +21,7 @@ from monai.handlers import (
     MetricLogger,
     MetricsSaver,
 )
-import torch.nn.functional as F
-
-import torch.multiprocessing as mp
+import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
@@ -245,15 +243,18 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
             print("Running on CPU — disabling AMP and CUDA-related configs.")
         self.device = torch.device(self.config.device)
 
-        train_loader, val_loader = segmentation_dataloaders(
-            config=config, train=True, valid=True, test=False
-        )
-         # Ensure DDP samplers
-        if not isinstance(train_loader.sampler, DistributedSampler):
-            train_loader.sampler = DistributedSampler(train_loader.dataset)
-        if not isinstance(val_loader.sampler, DistributedSampler):
-            val_loader.sampler = DistributedSampler(val_loader.dataset, shuffle=False)
+        rank = dist.get_rank() if dist.is_initialized() else 0
+        world_size = dist.get_world_size() if dist.is_initialized() else 1
 
+        train_loader, val_loader = segmentation_dataloaders(
+            config=config,
+            train=True,
+            valid=True,
+            test=False,
+            rank=rank,
+            world_size=world_size
+        )
+        self.train_sampler = train_loader.sampler if isinstance(train_loader.sampler, DistributedSampler) else None
         # network = get_model(config=config).to(self.device)
         network = get_model(config=config).to(self.device)
         network = DDP(network, device_ids=[self.local_rank])
@@ -434,7 +435,11 @@ class SegmentationTrainer(monai.engines.SupervisedTrainer):
             print("Error during checkpoint loading, training from scratch")
             pass
         # train the model
-        super().run()
+        for epoch in range(self.state.epoch_length, self.state.max_epochs):
+            if self.train_sampler is not None:
+                self.train_sampler.set_epoch(epoch)
+            super().run()
+
 
         # make metrics and losses more accessible
         self.loss = {
